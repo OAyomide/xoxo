@@ -10,11 +10,13 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mongodb/mongo-go-driver/bson"
+	"github.com/mongodb/mongo-go-driver/bson/primitive"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gorilla/mux"
 	"github.com/oayomide/xoxo/db"
 	"github.com/oayomide/xoxo/model"
+	"github.com/oayomide/xoxo/text"
 )
 
 func main() {
@@ -24,6 +26,7 @@ func main() {
 	router.HandleFunc("/signup", handleSignUp).Methods("POST")
 	router.HandleFunc("/login", handleLoginRoute).Methods("POST")
 	router.HandleFunc("/me", handleProfileRoute).Methods("GET")
+	router.HandleFunc("/me/note", text.HandleTextCopy).Methods("POST")
 	// http.HandleFunc("/", handleHomeRoute)
 	// get the port
 	port := os.Getenv("port")
@@ -37,6 +40,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+type LoginResponse struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Token    string `json:"jwt_token"`
+	Phone    string `json:"phone"`
+	ID       string `json:"id"`
 }
 
 func handleHomeRoute(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +101,6 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 
 			signup.Password = string(hash)
 			newlyRegisterdUser, err := collection.InsertOne(context.TODO(), signup)
-
 			if err != nil {
 				fmt.Printf("ERROR CREATING USER: %#v", err)
 				res.Error = err.Error()
@@ -130,6 +140,7 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	var result model.User
+	var lresponse LoginResponse
 	var res model.Response
 
 	err = collection.FindOne(context.TODO(), bson.D{{"username", user.Username}}).Decode(&result) // saving the result into a pointer to another instance of model.User
@@ -152,6 +163,7 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 		"username": result.Username,
 		"phone":    result.Phone,
 		"email":    result.Email,
+		"_id":      result.ID,
 	})
 
 	tokenString, err := token.SignedString([]byte("xoxo")) //TODO: Move this to a config file/struct
@@ -161,10 +173,21 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result.Token = tokenString
-	result.Password = ""
-	json.NewEncoder(w).Encode(result) // encoding result because thats what we want to return. it contains the jwt key
+	lresponse.Email = result.Email
+	lresponse.ID = result.ID.Hex()
+	lresponse.Phone = result.Phone
+	lresponse.Username = result.Username
+	lresponse.Token = tokenString
+
+	json.NewEncoder(w).Encode(lresponse) // encoding result because thats what we want to return. it contains the jwt key
 	return
+}
+
+type ProfileResponse struct {
+	Username string `json:"username"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
+	ID       string `json:"id"`
 }
 
 func handleProfileRoute(w http.ResponseWriter, r *http.Request) {
@@ -180,16 +203,18 @@ func handleProfileRoute(w http.ResponseWriter, r *http.Request) {
 		return []byte("xoxo"), nil
 	})
 
-	var result model.User
+	// var result model.User
+	var presponse ProfileResponse
 	var res model.Response
 
 	claims, ok := token.Claims.(jwt.MapClaims)
+	uid, _ := primitive.ObjectIDFromHex(claims["_id"].(string))
 	if ok && token.Valid {
-		result.Username = claims["username"].(string)
-		result.Email = claims["email"].(string)
-		result.Phone = claims["phone"].(string)
-
-		json.NewEncoder(w).Encode(result)
+		presponse.Username = claims["username"].(string)
+		presponse.Email = claims["email"].(string)
+		presponse.Phone = claims["phone"].(string)
+		presponse.ID = uid.Hex()
+		json.NewEncoder(w).Encode(presponse)
 		return
 	} else {
 		res.Error = err.Error()
@@ -197,5 +222,4 @@ func handleProfileRoute(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(res)
 		return
 	}
-	// body, _ := ioutil.ReadAll(r.Body)
 }
