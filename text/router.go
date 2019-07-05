@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/mongodb/mongo-go-driver/mongo/options"
 
@@ -26,6 +27,7 @@ type HandleCopyResponse struct {
 func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	tokenString := r.Header.Get("Authorization")
+	timeStamp := time.Now().String()
 	var text Text
 	var res model.Response
 	body, _ := ioutil.ReadAll(r.Body)
@@ -70,7 +72,8 @@ func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
 
 			if err != nil {
 				fmt.Println("USER DOESNT HAVE ANY NOTE CREATED. . .GOING TO CREATE FOR USER")
-				_, err := textCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"note", text.Note}, {"timestamp", text.Timestamp}})
+				ntTSave := []Text{Text{Name: text.Name, Note: text.Note, Timestamp: time.Now().String()}}
+				_, err := textCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"notes", ntTSave}})
 				if err != nil {
 					res.Error = err.Error()
 					w.WriteHeader(http.StatusInternalServerError)
@@ -85,7 +88,8 @@ func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// _, err := textCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"note", text.Note}, {"timestamp", text.Timestamp}})
-			_, err := textCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}}, bson.D{{"$set", bson.D{{"note", text.Note}, {"timestamp", text.Timestamp}}}}, options.Update().SetUpsert(true))
+			ntUpdate := Text{Name: text.Name, Note: text.Note, Timestamp: time.Now().String()}
+			_, err := textCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}}, bson.D{{"$push", bson.D{{"notes", ntUpdate}}}}, options.Update().SetUpsert(true))
 
 			if err != nil {
 				fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
@@ -96,7 +100,7 @@ func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
 
 			var hnresponse HandleCopyResponse
 			hnresponse.Note = text.Note
-			hnresponse.Time = string(text.Timestamp)
+			hnresponse.Time = string(timeStamp)
 			res.Data = "Created note for user!"
 			json.NewEncoder(w).Encode(hnresponse)
 			return
@@ -106,6 +110,11 @@ func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("TOKEN IS NOT VALID")
 		json.NewEncoder(w).Encode(res)
 	}
+}
+
+func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 }
 
 // token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
