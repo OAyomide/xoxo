@@ -26,11 +26,16 @@ type User struct {
 }
 
 type Notes struct {
-	User      string `json:"id"`
-	Text      string `json:"note"`
+	Note      string `json:"note"`
+	Name      string `json:"name"`
 	Timestamp string `json:"timestamp"`
 }
 
+type UserNotes struct {
+	ID    primitive.ObjectID `bson:"_id"`
+	User  string             `json:"user"`
+	Notes []Notes            `json:"notes"`
+}
 type Response struct {
 	Error string `json:"error"`
 	Data  string `json:"data,omitempty"`
@@ -52,9 +57,10 @@ type ProfileResponse struct {
 }
 
 type Text struct {
-	Note      string `json:"note"`
-	Timestamp string `json:"timestamp"`
-	Name      string `json:"name"`
+	Note      string             `json:"note"`
+	Timestamp string             `json:"timestamp"`
+	Name      string             `json:"name"`
+	ID        primitive.ObjectID `bson:"_id"`
 }
 
 type HandleCopyResponse struct {

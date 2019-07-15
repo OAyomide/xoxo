@@ -8,20 +8,20 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mongodb/mongo-go-driver/bson/primitive"
+
 	"github.com/mongodb/mongo-go-driver/mongo/options"
 
 	"github.com/mongodb/mongo-go-driver/bson"
-
-	"github.com/dgrijalva/jwt-go"
 
 	"github.com/oayomide/xoxo/db"
 	"github.com/oayomide/xoxo/model"
 )
 
-func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
+func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	tokenString := r.Header.Get("Authorization")
-	timeStamp := time.Now().String()
+	uid := r.Context().Value("claims")
+	fmt.Printf("USER ID FROM CONTEXT IN HEADER IS: %#v\n", uid)
 	var text model.Text
 	var res model.Response
 	body, _ := ioutil.ReadAll(r.Body)
@@ -33,83 +33,116 @@ func HandleTextCopy(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(res)
 		return
 	}
-	collection, _ := db.GetCollection("user")
 
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		_, ok := token.Method.(*jwt.SigningMethodHMAC)
-		if !ok {
-			return nil, fmt.Errorf("UNEXPECTED JWT TOKEN")
-		}
+	ntTSave := []model.Text{model.Text{Name: text.Name, Note: text.Note, Timestamp: time.Now().String(), ID: primitive.NewObjectID()}}
+	collection, _ := db.GetCollection("users")
 
-		return []byte("xoxo"), nil
-	})
+	var result model.UserNotes
+	var user model.User
+	id, _ := primitive.ObjectIDFromHex(fmt.Sprintf("%v", uid))
+	err = collection.FindOne(context.TODO(), bson.D{{"_id", id}}).Decode(&user)
+	fmt.Printf("USER'S NOTES DATA FROM DB IS:: %v\n", user.Email)
 
-	claims, ok := token.Claims.(jwt.MapClaims)
+	if err != nil {
+		fmt.Printf("Error", err.Error())
+		json.NewEncoder(w).Encode(err)
+		return
+	}
 
-	var result model.Text
-	if ok && token.Valid {
-		// uid, _ := primitive.ObjectIDFromHex(claims["_id"].(string))
-		uid := claims["_id"].(string)
+	fmt.Println("TADA!! WORKED NOW...")
 
-		if uid == "" {
-			fmt.Println("USER UID NOT FOUND.. USER IS NOT VALID")
-			res.Error = "user not found"
-			w.WriteHeader(http.StatusNotFound)
+	// we want to find user selection in notes collection
+	notesCollection, _ := db.GetCollection("note")
+	err = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}}).Decode(&result)
+
+	// user doesnt exist. has no note created at all
+	if result.User == "" {
+		fmt.Printf("USER HAS NO NOTES CREATED\n\n")
+		// then create here
+		_, err = notesCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"notes", ntTSave}})
+
+		if err != nil {
+			res.Data = "not created"
+			res.Error = err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(res)
 			return
 		}
-		err := collection.FindOne(context.TODO(), bson.D{{"id", uid}}).Decode(&result)
 
-		if err != nil {
-			textCollection, _ := db.GetCollection("note")
-			err = textCollection.FindOne(context.TODO(), bson.D{{"user", uid}}).Decode(&result)
+		fmt.Println("SUCCESSFULLY CREATED NEW NOTE FOR THE USER")
+		res.Data = "created"
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(res)
+		return
+	} else {
+		var nt model.UserNotes
+		// user has a note created.. then look if the user has a note with the name already
+		_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.name", text.Name}}).Decode(&nt)
 
-			if err != nil {
-				fmt.Println("USER DOESNT HAVE ANY NOTE CREATED. . .GOING TO CREATE FOR USER")
-				ntTSave := []model.Text{model.Text{Name: text.Name, Note: text.Note, Timestamp: time.Now().String()}}
-				_, err := textCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"notes", ntTSave}})
-				if err != nil {
-					res.Error = err.Error()
-					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(res)
-					return
-				}
-
-				res.Data = "NOTE CREATED FOR NEW USER"
-				w.WriteHeader(http.StatusCreated)
-				json.NewEncoder(w).Encode(res)
-				return
-			}
-
-			// _, err := textCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"note", text.Note}, {"timestamp", text.Timestamp}})
-			ntUpdate := model.Text{Name: text.Name, Note: text.Note, Timestamp: time.Now().String()}
-			_, err := textCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}}, bson.D{{"$push", bson.D{{"notes", ntUpdate}}}}, options.Update().SetUpsert(true))
-
-			if err != nil {
-				fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
-				res.Error = err.Error()
-				json.NewEncoder(w).Encode(res)
-				return
-			}
-
-			var hnresponse model.HandleCopyResponse
-			hnresponse.Note = text.Note
-			hnresponse.Time = string(timeStamp)
-			res.Data = "Created note for user!"
-			json.NewEncoder(w).Encode(hnresponse)
+		// the notes that has the same title as the note we want to create exists. i.e it doesnt return an empty array
+		if len(nt.Notes) > 0 {
+			res.Error = "note already exists"
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(res)
 			return
 		}
-	} else {
-		res.Error = err.Error()
-		fmt.Println("TOKEN IS NOT VALID")
+
+		_, inserError := notesCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"notes", ntTSave}})
+
+		if inserError != nil {
+			res.Data = "error creating"
+			res.Error = inserError.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(res)
+			return
+		}
+
+		fmt.Println("SUCCESSFULLY CREATED NEW NOTE FOR THE USER")
+		res.Data = "created"
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(res)
+		return
 	}
 }
 
 func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	claims := r.Context().Value("claims")
+	uid := r.Context().Value("claims")
+	var text model.Text
+	var res model.Response
+	body, _ := ioutil.ReadAll(r.Body)
+	err := json.Unmarshal(body, &text)
 
-	// first, we want to get the name of the note the user wants to update.
-	// if there is no name, we want send a statusnotfound
+	if err != nil {
+		fmt.Printf("ERROR PARSING JSON INTO TEXT RECEIVER")
+		res.Error = err.Error()
+		json.NewEncoder(w).Encode(res)
+		return
+	}
+	var result model.Text
+	notesCollection, _ := db.GetCollection("note")
+	err = notesCollection.FindOne(context.TODO(), bson.D{{"id", uid}}).Decode(&result)
+
+	if err != nil {
+		fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
+		res.Error = err.Error()
+		json.NewEncoder(w).Encode(res)
+		return
+	}
+
+	_, err = notesCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}, {"notes.name", text.Name}}, bson.D{{"$set", bson.D{{"notes.$.note", text.Note}, {"notes.$.timestamp", time.Now().String()}}}}, options.Update().SetUpsert(true))
+
+	if err != nil {
+		fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
+		res.Error = err.Error()
+		json.NewEncoder(w).Encode(res)
+		return
+	}
+
+	var hnresponse model.HandleCopyResponse
+	hnresponse.Note = text.Note
+	hnresponse.Time = string(time.Now().String())
+	res.Data = "Created note for user!"
+	json.NewEncoder(w).Encode(hnresponse)
+	return
 }
