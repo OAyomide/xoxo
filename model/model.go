@@ -27,7 +27,7 @@ type User struct {
 
 type Notes struct {
 	Note      string `json:"note"`
-	Name      string `json:"name"`
+	Title     string `json:"title"`
 	Timestamp string `json:"timestamp"`
 }
 
@@ -59,7 +59,7 @@ type ProfileResponse struct {
 type Text struct {
 	Note      string             `json:"note"`
 	Timestamp string             `json:"timestamp"`
-	Name      string             `json:"name"`
+	Title     string             `json:"title"`
 	ID        primitive.ObjectID `bson:"_id"`
 }
 

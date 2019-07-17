@@ -34,7 +34,7 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ntTSave := []model.Text{model.Text{Name: text.Name, Note: text.Note, Timestamp: time.Now().String(), ID: primitive.NewObjectID()}}
+	ntTSave := []model.Text{model.Text{Title: text.Title, Note: text.Note, Timestamp: time.Now().String(), ID: primitive.NewObjectID()}}
 	collection, _ := db.GetCollection("users")
 
 	var result model.UserNotes
@@ -77,7 +77,7 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var nt model.UserNotes
 		// user has a note created.. then look if the user has a note with the name already
-		_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.name", text.Name}}).Decode(&nt)
+		_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.name", text.Title}}).Decode(&nt)
 
 		// the notes that has the same title as the note we want to create exists. i.e it doesnt return an empty array
 		if len(nt.Notes) > 0 {
@@ -130,7 +130,7 @@ func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = notesCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}, {"notes.name", text.Name}}, bson.D{{"$set", bson.D{{"notes.$.note", text.Note}, {"notes.$.timestamp", time.Now().String()}}}}, options.Update().SetUpsert(true))
+	_, err = notesCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}, {"notes.name", text.Title}}, bson.D{{"$set", bson.D{{"notes.$.note", text.Note}, {"notes.$.timestamp", time.Now().String()}}}}, options.Update().SetUpsert(true))
 
 	if err != nil {
 		fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
