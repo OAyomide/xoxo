@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
+
+	"github.com/mongodb/mongo-go-driver/bson/primitive"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/mongodb/mongo-go-driver/bson"
@@ -14,6 +17,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type Claims struct {
+	Username string             `json:"username"`
+	Phone    string             `json:"phone"`
+	Email    string             `json:"email`
+	ID       primitive.ObjectID `bson:"_id"`
+	jwt.StandardClaims
+}
+
 func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	// first set the header to application/json
 	w.Header().Set("Content-Type", "application/json")
@@ -21,7 +32,8 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 
 	body, _ := ioutil.ReadAll(r.Body)
 	err := json.Unmarshal(body, &user)
-
+	// make the token expire in 5 minutes
+	expirationTime := time.Now().Add(5 * time.Minute)
 	fmt.Printf("MARSHALLED:: %#v", user)
 	if err != nil {
 		fmt.Printf("ERROR DECODING USER STRUCT TO JSON: %#v", err)
@@ -53,12 +65,17 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": result.Username,
-		"phone":    result.Phone,
-		"email":    result.Email,
-		"_id":      result.ID,
-	})
+	claims := &Claims{
+		Username: result.Username,
+		Phone:    result.Phone,
+		Email:    result.Email,
+		ID:       result.ID,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	tokenString, err := token.SignedString([]byte("xoxo")) //TODO: Move this to a config file/struct
 	if err != nil {
@@ -71,8 +88,14 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	lresponse.ID = result.ID.Hex()
 	lresponse.Phone = result.Phone
 	lresponse.Username = result.Username
-	lresponse.Token = tokenString
+	// lresponse.Token = tokenString
 
+	http.SetCookie(w, &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	})
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(lresponse) // encoding result because thats what we want to return. it contains the jwt key
 	return
 }

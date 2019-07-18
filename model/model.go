@@ -44,7 +44,7 @@ type Response struct {
 type LoginResponse struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
-	Token    string `json:"jwt_token"`
+	Token    string `json:"jwt_token,omitempty"`
 	Phone    string `json:"phone"`
 	ID       string `json:"id"`
 }
