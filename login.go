@@ -33,7 +33,8 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 	err := json.Unmarshal(body, &user)
 	// make the token expire in 5 minutes
-	expirationTime := time.Now().Add(5 * time.Minute)
+	expirationTime := time.Now().Add(1 * time.Minute)
+	cookieExpirationTime := time.Now().Add(2 * time.Minute)
 	fmt.Printf("MARSHALLED:: %#v", user)
 	if err != nil {
 		fmt.Printf("ERROR DECODING USER STRUCT TO JSON: %#v", err)
@@ -93,7 +94,7 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:    "token",
 		Value:   tokenString,
-		Expires: expirationTime,
+		Expires: cookieExpirationTime,
 	})
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(lresponse) // encoding result because thats what we want to return. it contains the jwt key
