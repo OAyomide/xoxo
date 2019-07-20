@@ -45,9 +45,47 @@ func AuthMiddleWare(next http.Handler) http.Handler {
 			return []byte("xoxo"), nil
 		})
 
+		if !token.Valid {
+			fmt.Println("JWT TOKEN IS NOT VALID. HERE IS WHERE WE REFRESH IF ITS BEEN WITHIN 30s WHEN THE TOKEN EXPIRED")
+			if time.Unix(claims.ExpiresAt, 0).Sub(time.Now()) > 30*time.Second {
+				res.Error = err.Error()
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(res)
+				return
+			} else {
+				// create new token now
+				expirationTime := time.Now().Add(1 * time.Minute)
+				claims.ExpiresAt = expirationTime.Unix()
+				token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+				tokenString, err = token.SignedString([]byte("xoxo"))
+
+				if err != nil {
+					res.Error = "internal server error"
+					w.WriteHeader(http.StatusInternalServerError)
+					json.NewEncoder(w).Encode(res)
+					return
+				}
+
+				ctx := context.WithValue(r.Context(), "claims", claims.ID.Hex())
+				r = r.WithContext(ctx)
+				next.ServeHTTP(w, r)
+			}
+			// res.Error = err.Error()
+			// w.WriteHeader(http.StatusUnauthorized)
+			// json.NewEncoder(w).Encode(res)
+			// return
+		}
+
 		if err != nil {
-			// fmt.Println("ERROR AUTHENTICATING JWT WITH MIDDLEWARE\n")
 			fmt.Printf("JWT ERROR IS: %v", err)
+			if err == jwt.ErrSignatureInvalid {
+				fmt.Println("UNAUTHORIZED. JWT SIG IS INVALID")
+				res.Error = err.Error()
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(res)
+				return
+			}
+
 			// w.Header().Set("Content-Type", "application/json")
 			// w.WriteHeader(http.StatusUnauthorized)
 			// res.Error = "UNAUTHORIZED... PLEASE CHECK IF TOKEN HAS BEEN PASSED"
@@ -55,35 +93,9 @@ func AuthMiddleWare(next http.Handler) http.Handler {
 			// return
 			// here, we check if the period the token expired is within 30 seconds of
 			// the set expiration time. if not, return bad request
-			if time.Unix(claims.ExpiresAt, 0).Sub(time.Now()) > 30*time.Second {
-				res.Error = "bad request... this is where they login in again"
-				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(res)
-				return
-			}
-
-			// create new token now
-			expirationTime := time.Now().Add(1 * time.Minute)
-			claims.ExpiresAt = expirationTime.Unix()
-			token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-			tokenString, err = token.SignedString([]byte("xoxo"))
-
-			if err != nil {
-				res.Error = "internal server error"
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(res)
-				return
-			}
-		}
-
-		if !token.Valid {
-			fmt.Printf("OOOOUUUU...ERROR HEEERERE")
-			fmt.Printf("ERROR IS:: %s", token)
-			w.WriteHeader(http.StatusUnauthorized)
-			return
 		}
 		if token.Valid {
-			ctx := context.WithValue(r.Context(), "claims", claims.ID)
+			ctx := context.WithValue(r.Context(), "claims", claims.ID.Hex())
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		}

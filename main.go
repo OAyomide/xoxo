@@ -18,6 +18,7 @@ func main() {
 	router.HandleFunc("/login", handleLoginRoute).Methods("POST")
 	router.HandleFunc("/me/note/new", HandleCreateNote).Methods("POST")
 	router.HandleFunc("/me/note/update", HandleUpdateNote).Methods("POST")
+	router.HandleFunc("/me/note/delete", HandleNotesDelete).Methods("DELETE")
 	router.HandleFunc("/me", HandleMe)
 
 	// get the port

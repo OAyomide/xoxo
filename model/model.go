@@ -37,7 +37,7 @@ type UserNotes struct {
 	Notes []Notes            `json:"notes"`
 }
 type Response struct {
-	Error string `json:"error"`
+	Error string `json:"error,omitempty"`
 	Data  string `json:"data,omitempty"`
 }
 
@@ -64,7 +64,7 @@ type Text struct {
 }
 
 type HandleCopyResponse struct {
-	Username string `json:"username"`
+	Username string `json:"username,omitempty"`
 	Note     string `json:"note"`
 	Time     string `json:"timestamp"`
 }

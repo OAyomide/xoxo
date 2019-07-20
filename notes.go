@@ -21,14 +21,12 @@ import (
 func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	uid := r.Context().Value("claims")
-	fmt.Printf("USER ID FROM CONTEXT IN HEADER IS: %#v\n", uid)
 	var text model.Text
 	var res model.Response
 	body, _ := ioutil.ReadAll(r.Body)
 	err := json.Unmarshal(body, &text)
 
 	if err != nil {
-		fmt.Printf("ERROR PARSING JSON INTO TEXT RECEIVER")
 		res.Error = err.Error()
 		json.NewEncoder(w).Encode(res)
 		return
@@ -36,30 +34,28 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 
 	ntTSave := []model.Text{model.Text{Title: text.Title, Note: text.Note, Timestamp: time.Now().String(), ID: primitive.NewObjectID()}}
 	collection, _ := db.GetCollection("users")
-
+	// we want to find user selection in notes collection
+	notesCollection, _ := db.GetCollection("notes")
 	var result model.UserNotes
 	var user model.User
 	id, _ := primitive.ObjectIDFromHex(fmt.Sprintf("%v", uid))
 	err = collection.FindOne(context.TODO(), bson.D{{"_id", id}}).Decode(&user)
-	fmt.Printf("USER'S NOTES DATA FROM DB IS:: %v\n", user.Email)
 
 	if err != nil {
-		fmt.Printf("Error", err.Error())
-		json.NewEncoder(w).Encode(err)
-		return
+		if err.Error() == "mongo: no documents in result" {
+			fmt.Println("USER NOT FOUND FROM THE DB")
+			res.Error = "user doesnt exist. cannot create note"
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(res)
+			return
+		}
 	}
 
-	fmt.Println("TADA!! WORKED NOW...")
-
-	// we want to find user selection in notes collection
-	notesCollection, _ := db.GetCollection("note")
 	err = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}}).Decode(&result)
 
 	// user doesnt exist. has no note created at all
 	if result.User == "" {
-		fmt.Printf("USER HAS NO NOTES CREATED\n\n")
-		// then create here
-		_, err = notesCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"notes", ntTSave}})
+		_, err = notesCollection.InsertOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes", ntTSave}})
 
 		if err != nil {
 			res.Data = "not created"
@@ -77,8 +73,7 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 	} else {
 		var nt model.UserNotes
 		// user has a note created.. then look if the user has a note with the name already
-		_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.name", text.Title}}).Decode(&nt)
-
+		_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.title", text.Title}}).Decode(&nt)
 		// the notes that has the same title as the note we want to create exists. i.e it doesnt return an empty array
 		if len(nt.Notes) > 0 {
 			res.Error = "note already exists"
@@ -87,7 +82,7 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, inserError := notesCollection.InsertOne(context.TODO(), bson.D{{"user", uid}, {"notes", ntTSave}})
+		_, inserError := notesCollection.InsertOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes", ntTSave}})
 
 		if inserError != nil {
 			res.Data = "error creating"
@@ -96,8 +91,6 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(res)
 			return
 		}
-
-		fmt.Println("SUCCESSFULLY CREATED NEW NOTE FOR THE USER")
 		res.Data = "created"
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(res)
@@ -108,33 +101,36 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	uid := r.Context().Value("claims")
+	id, _ := primitive.ObjectIDFromHex(fmt.Sprintf("%v", uid))
 	var text model.Text
 	var res model.Response
 	body, _ := ioutil.ReadAll(r.Body)
 	err := json.Unmarshal(body, &text)
 
 	if err != nil {
-		fmt.Printf("ERROR PARSING JSON INTO TEXT RECEIVER")
 		res.Error = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(res)
 		return
 	}
 	var result model.Text
-	notesCollection, _ := db.GetCollection("note")
-	err = notesCollection.FindOne(context.TODO(), bson.D{{"id", uid}}).Decode(&result)
+	notesCollection, _ := db.GetCollection("notes")
+	err = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.title", text.Title}}).Decode(&result)
 
 	if err != nil {
-		fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
+		fmt.Println("COULNDT FIND THE NOTE WITH THAT TITLE")
 		res.Error = err.Error()
+		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(res)
 		return
 	}
 
-	_, err = notesCollection.UpdateOne(context.TODO(), bson.D{{"user", uid}, {"notes.name", text.Title}}, bson.D{{"$set", bson.D{{"notes.$.note", text.Note}, {"notes.$.timestamp", time.Now().String()}}}}, options.Update().SetUpsert(true))
+	_, err = notesCollection.UpdateOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.title", text.Title}}, bson.D{{"$set", bson.D{{"notes.$.note", text.Note}, {"notes.$.timestamp", time.Now().String()}}}}, options.Update().SetUpsert(true))
 
 	if err != nil {
-		fmt.Println("ERROR CREATING AND UPDATING NEW USER DOCUMENT INTO THE DB")
+		fmt.Println("ERROR UPDATING DOCUMENT IN THE DB")
 		res.Error = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(res)
 		return
 	}
@@ -143,6 +139,43 @@ func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	hnresponse.Note = text.Note
 	hnresponse.Time = string(time.Now().String())
 	res.Data = "Created note for user!"
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(hnresponse)
+	return
+}
+
+func HandleNotesDelete(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	uid := r.Context().Value("claims")
+	id, _ := primitive.ObjectIDFromHex(fmt.Sprintf("%v", uid))
+
+	// then get the id from the db
+	var note model.Text
+	var res model.Response
+
+	body, _ := ioutil.ReadAll(r.Body)
+	err := json.Unmarshal(body, &note)
+	notesCollection, _ := db.GetCollection("notes")
+	if err != nil {
+		fmt.Println("COULNDT FIND THE NOTE WITH THAT TITLE")
+		res.Error = err.Error()
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(res)
+		return
+	}
+
+	_, err = notesCollection.DeleteOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.title", note.Title}})
+	if err != nil {
+		fmt.Println("ERROR DELETING NOTE")
+		res.Error = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(res)
+		return
+	}
+
+	fmt.Println("DELETED NOTE")
+	res.Data = "note deleted"
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
 	return
 }

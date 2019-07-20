@@ -33,8 +33,8 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 	err := json.Unmarshal(body, &user)
 	// make the token expire in 5 minutes
-	expirationTime := time.Now().Add(1 * time.Minute)
-	cookieExpirationTime := time.Now().Add(2 * time.Minute)
+	expirationTime := time.Now().Add(5 * time.Minute)
+	cookieExpirationTime := time.Now().Add(10 * time.Minute)
 	fmt.Printf("MARSHALLED:: %#v", user)
 	if err != nil {
 		fmt.Printf("ERROR DECODING USER STRUCT TO JSON: %#v", err)
@@ -54,6 +54,7 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Print("ERROR GETTING USERNAME FROM THE DB: %#v", err)
 		res.Error = "USERNAME OR PASSWORD NOT VALID"
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(res)
 		return
 	}
@@ -62,6 +63,7 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Printf("USER PASSWORD INVALID: %#v", err)
 		res.Error = "USERNAME OR PASSWORD NOT VALID"
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(res)
 		return
 	}

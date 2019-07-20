@@ -23,8 +23,8 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	var res model.Response
 
 	if err != nil {
-		fmt.Printf("ERROR PARSING JSON AND SAVING TO POINTER TO SIGNUP STRUCT %#v", err)
 		res.Error = err.Error()
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(res)
 		return
 	}
@@ -35,7 +35,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	collection, err := db.GetDBCollection()
 
 	if err != nil {
-		fmt.Printf("ERROR GETTING THE COLLECTION FROM THE DB. %#v", err)
+		fmt.Print("ERROR GETTING THE COLLECTION FROM THE DB.")
 		res.Error = err.Error()
 		json.NewEncoder(w).Encode(res)
 		return
@@ -48,29 +48,30 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 			hash, err := bcrypt.GenerateFromPassword([]byte(signup.Password), 6)
 
 			if err != nil {
-				fmt.Printf("ERROR HASHING USER PASSWORD USING BCRYPT: %#v", err)
 				res.Error = err.Error()
 				json.NewEncoder(w).Encode(res)
 				return
 			}
 
 			signup.Password = string(hash)
-			newlyRegisterdUser, err := collection.InsertOne(context.TODO(), signup)
+			_, err = collection.InsertOne(context.TODO(), signup)
 			if err != nil {
-				fmt.Printf("ERROR CREATING USER: %#v", err)
+				fmt.Printf("ERROR CREATING USER: %#v\n", err)
 				res.Error = err.Error()
+				w.WriteHeader(http.StatusInternalServerError)
 				json.NewEncoder(w).Encode(res)
 				return
 			}
 
-			fmt.Printf("NEWLY REGISTERED USER IS: %#v", newlyRegisterdUser)
 			res.Data = "NEW USER CREATED!"
+			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(res)
 			return
 		}
 	}
 
 	res.Data = "USERNAME ALREADY TAKEN"
+	w.WriteHeader(http.StatusConflict)
 	json.NewEncoder(w).Encode(res)
 	return
 }
