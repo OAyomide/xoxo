@@ -15,7 +15,7 @@ func AuthMiddleWare(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// unAuths are paths we dont want to authorize for users to access.
-		unAuths := []string{"/", "/about", "/blog", "/signup", "/login"}
+		unAuths := []string{"/", "/about", "/blog", "/signup", "/api/v1/login"}
 		var res model.Response
 
 		for _, path := range unAuths {

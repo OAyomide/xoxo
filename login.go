@@ -101,4 +101,5 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(lresponse) // encoding result because thats what we want to return. it contains the jwt key
 	return
+
 }
