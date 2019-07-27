@@ -91,6 +91,7 @@ func handleLoginRoute(w http.ResponseWriter, r *http.Request) {
 	lresponse.ID = result.ID.Hex()
 	lresponse.Phone = result.Phone
 	lresponse.Username = result.Username
+	lresponse.Token = tokenString
 	// lresponse.Token = tokenString
 
 	http.SetCookie(w, &http.Cookie{

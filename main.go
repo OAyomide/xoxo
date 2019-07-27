@@ -20,7 +20,7 @@ func main() {
 	router.HandleFunc("/me/note/new", HandleCreateNote).Methods("POST")
 	router.HandleFunc("/me/note/update", HandleUpdateNote).Methods("POST")
 	router.HandleFunc("/me/note/delete", HandleNotesDelete).Methods("DELETE")
-	router.HandleFunc("/me", HandleMe)
+	router.HandleFunc("/api/v1/me", HandleMe)
 
 	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
 	originsOk := handlers.AllowedOrigins([]string{"http://localhost:3000"})

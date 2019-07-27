@@ -25,7 +25,7 @@ func AuthMiddleWare(next http.Handler) http.Handler {
 			}
 		}
 		// tokenString := r.Header.Get("Authorization")
-		c, err := r.Cookie("token")
+		c, err := r.Cookie("token_string")
 		if err != nil {
 			if err == http.ErrNoCookie {
 				w.WriteHeader(http.StatusUnauthorized)
@@ -65,8 +65,13 @@ func AuthMiddleWare(next http.Handler) http.Handler {
 					json.NewEncoder(w).Encode(res)
 					return
 				}
+				var response model.ProfileResponse
+				response.Email = claims.Email
+				response.ID = claims.ID.Hex()
+				response.Phone = claims.Phone
+				response.Username = claims.Username
 
-				ctx := context.WithValue(r.Context(), "claims", claims.ID.Hex())
+				ctx := context.WithValue(r.Context(), "claims", response)
 				r = r.WithContext(ctx)
 				next.ServeHTTP(w, r)
 			}
@@ -94,8 +99,15 @@ func AuthMiddleWare(next http.Handler) http.Handler {
 			// here, we check if the period the token expired is within 30 seconds of
 			// the set expiration time. if not, return bad request
 		}
+
+		var response model.ProfileResponse
+		response.Email = claims.Email
+		response.ID = claims.ID.Hex()
+		response.Phone = claims.Phone
+		response.Username = claims.Username
+
 		if token.Valid {
-			ctx := context.WithValue(r.Context(), "claims", claims.ID.Hex())
+			ctx := context.WithValue(r.Context(), "claims", response)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		}
