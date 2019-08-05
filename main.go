@@ -22,6 +22,8 @@ func main() {
 	router.HandleFunc("/me/note/delete", HandleNotesDelete).Methods("DELETE")
 	router.HandleFunc("/api/v1/me", HandleMe)
 
+	// update the profile
+	router.HandleFunc("/api/v1/user/{id}", UpdateProfile).Methods("POST", "PUT")
 	headersOk := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization"})
 	originsOk := handlers.AllowedOrigins([]string{"http://localhost:3000"})
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"})

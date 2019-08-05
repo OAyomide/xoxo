@@ -18,6 +18,7 @@ import (
 	"github.com/oayomide/xoxo/model"
 )
 
+// HandleCreateNote creates a new note for a user
 func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	uid := r.Context().Value("claims")
@@ -70,34 +71,34 @@ func HandleCreateNote(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(res)
 		return
-	} else {
-		var nt model.UserNotes
-		// user has a note created.. then look if the user has a note with the name already
-		_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.title", text.Title}}).Decode(&nt)
-		// the notes that has the same title as the note we want to create exists. i.e it doesnt return an empty array
-		if len(nt.Notes) > 0 {
-			res.Error = "note already exists"
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(res)
-			return
-		}
-
-		_, inserError := notesCollection.InsertOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes", ntTSave}})
-
-		if inserError != nil {
-			res.Data = "error creating"
-			res.Error = inserError.Error()
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(res)
-			return
-		}
-		res.Data = "created"
-		w.WriteHeader(http.StatusCreated)
+	}
+	var nt model.UserNotes
+	// user has a note created.. then look if the user has a note with the name already
+	_ = notesCollection.FindOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes.title", text.Title}}).Decode(&nt)
+	// the notes that has the same title as the note we want to create exists. i.e it doesnt return an empty array
+	if len(nt.Notes) > 0 {
+		res.Error = "note already exists"
+		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(res)
 		return
 	}
+
+	_, inserError := notesCollection.InsertOne(context.TODO(), bson.D{{"user", id.Hex()}, {"notes", ntTSave}})
+
+	if inserError != nil {
+		res.Data = "error creating"
+		res.Error = inserError.Error()
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(res)
+		return
+	}
+	res.Data = "created"
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(res)
+	return
 }
 
+// HandleUpdateNote updates a note for a user
 func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	uid := r.Context().Value("claims")
@@ -144,6 +145,7 @@ func HandleUpdateNote(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// HandleNotesDelete deletes a note for a user
 func HandleNotesDelete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	uid := r.Context().Value("claims")
